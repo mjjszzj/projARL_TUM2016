@@ -33,7 +33,6 @@ class SI(object):
 	turtlebot_vel = Pose2D()
 	turtlebot_acc = Accel() # TODO: AccelWithCovariance
 	'''
-
 	
 	# pose of turtle bot
 	tb_pos = (0,0,0)
@@ -88,20 +87,19 @@ class SI(object):
 	def cbJointStates(self, data):
 	    self.angLeft = data.position[0]
 	    self.angRight = data.position[1]
-	    self.angAbs = (self.angLeft - self.angRight)%(2*PI)
-	    if self.angAbs > PI:
-	        self.angAbs -= 2*PI
+	    self.angAbs = (self.angLeft - self.angRight)%(2*180)
+	    if self.angAbs > 180:
+	        self.angAbs -= 2*180
 	        # TODO: Radian to Degree
 	        
 	def cbTimerVel(self, event):
-	    # update
-	    self.posX[1] = self.tb_pos[0]; self.posY[1] = self.tb_pos[1]; self.posT[1] = self.angAbs
-	    # calculate
-	    self.tb_vel.x = (self.posX[1] - self.posX[0])/(1/self.freq)
-	    self.tb_vel.y = (self.posY[1] - self.posY[0])/(1/self.freq)
-	    self.tb_vel.theta = (self.posT[1] - self.posT[0])/(1/self.freq)
-	    
-	    self.posX[0] = self.posX[1]; self.posY[0] = self.posY[1]; self.posT[0] = self.posT[1]
+		# update
+		self.posX[1] = self.tb_pos[0]; self.posY[1] = self.tb_pos[1]; self.posT[1] = self.angAbs
+		# calculate
+		self.tb_vel.x = (self.posX[1] - self.posX[0])/(1/self.freq)
+		self.tb_vel.y = (self.posY[1] - self.posY[0])/(1/self.freq)
+		self.tb_vel.theta = (self.posT[1] - self.posT[0])/(1/self.freq)
+		self.posX[0] = self.posX[1]; self.posY[0] = self.posY[1]; self.posT[0] = self.posT[1]
 
 	'''Signal Processing Functions'''
 	def _run(self):
@@ -112,12 +110,12 @@ class SI(object):
 		    self.tb_cmd.theta = 0.0
 		    '''
 		    if self.tf.frameExists("/odom") and self.tf.frameExists("/base_footprint"):
-		    	t = self.tf.getLatestCommonTime("/odom", "/base_footprint")
-		        self.tb_pos = self.tf.lookupTransform("/odom", "/base_footprint", t)[0]
-		    print self.tb_vel
+			t = self.tf.getLatestCommonTime("/odom", "/base_footprint")
+			self.tb_pos = self.tf.lookupTransform("/odom", "/base_footprint", t)[0]
+		    #print self.tb_vel
 		    
 		    self.pubTBCommand.publish(self.tb_vel)
-		    rospy.spin()
+		    #rospy.spin()
 
 if __name__ == '__main__':
 	try:
