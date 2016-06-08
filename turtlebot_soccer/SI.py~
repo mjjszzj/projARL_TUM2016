@@ -17,7 +17,8 @@ import struct
 import binascii
 import numpy as np
 from geometry_msgs.msg import Pose2D, Accel, PoseArray, Vector3, Quaternion
-from tf.msg import tfMessage
+import tf
+from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 import rosbag
 import math
@@ -32,6 +33,8 @@ class SI(object):
 	turtlebot_vel = Pose2D()
 	turtlebot_acc = Accel() # TODO: AccelWithCovariance
 	'''
+
+	
 	# pose of turtle bot
 	tb_pos = Vector3()
 	tb_ang = Quaternion()
@@ -67,12 +70,12 @@ class SI(object):
 	def __init__(self):
 		
 		''' Subscriber '''
-		self.subJointStates = rospy.Subscriber("joint_states", JointState, self.cbJointStates)
-		self.subTF = rospy.Subscriber("tf", tfMessage, self.cbTF)
+		self.subJointStates = rospy.Subscriber("/joint_states", JointState, self.cbJointStates)
+		# tf message need to be treated differently
+		self.tf = tf.TransformListener()
 		
 		# Timer: Update posX and posY for calculating velocity
 		rospy.Timer(rospy.Duration(1/(self.freq)), self.cbTimerVel, oneshot=False)
-		
 		
 		# TODO: More subscribers
 		
@@ -90,7 +93,7 @@ class SI(object):
 	        self.angAbs -= 2*PI
 	        # TODO: Radian to Degree
 	        
-	def cbTimerVel(self):
+	def cbTimerVel(self, event):
 	    # update
 	    self.posX[1] = self.tb_pos.x; self.posY[1] = self.tb_pos.y; self.posT[1] = self.angAbs
 	    # calculate
@@ -99,10 +102,6 @@ class SI(object):
 	    self.tb_vel.theta = (self.posT[1] - self.posT[0])/(1/self.freq)
 	    
 	    self.posX[0] = self.posX[1]; self.posY[0] = self.posY[1]; self.posT[0] = self.posT[1]
-	    
-	def cbTF(self, data):
-	    self.tb_pos = data.translation
-	    self.tb_ang = data.rotation
 
 	'''Signal Processing Functions'''
 	def _run(self):
@@ -112,8 +111,15 @@ class SI(object):
 		    self.tb_cmd.y = 0.0
 		    self.tb_cmd.theta = 0.0
 		    '''
+		    try:
+		        t = self.tf.getLatestCommonTime("/base_link", "/base_footprint")
+		        self.tb_pos = self.tf.lookupTransform("/base_footprint", "/base_link", t)[0]
+		        print self.tb_pos
+		    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+		        continue
+		    
 		    self.pubTBCommand.publish(self.tb_cmd)
-		    rospy.spin()
+		    #rospy.spin()
 
 if __name__ == '__main__':
 	try:
