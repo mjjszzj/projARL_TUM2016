@@ -36,7 +36,7 @@ class SI(object):
 
 	
 	# pose of turtle bot
-	tb_pos = Vector3()
+	tb_pos = (0,0,0)
 	tb_ang = Quaternion()
 	
 	# left and right wheel
@@ -95,7 +95,7 @@ class SI(object):
 	        
 	def cbTimerVel(self, event):
 	    # update
-	    self.posX[1] = self.tb_pos.x; self.posY[1] = self.tb_pos.y; self.posT[1] = self.angAbs
+	    self.posX[1] = self.tb_pos[0]; self.posY[1] = self.tb_pos[1]; self.posT[1] = self.angAbs
 	    # calculate
 	    self.tb_vel.x = (self.posX[1] - self.posX[0])/(1/self.freq)
 	    self.tb_vel.y = (self.posY[1] - self.posY[0])/(1/self.freq)
@@ -111,15 +111,13 @@ class SI(object):
 		    self.tb_cmd.y = 0.0
 		    self.tb_cmd.theta = 0.0
 		    '''
-		    try:
-		        t = self.tf.getLatestCommonTime("/base_link", "/base_footprint")
-		        self.tb_pos = self.tf.lookupTransform("/base_footprint", "/base_link", t)[0]
-		        print self.tb_pos
-		    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-		        continue
+		    if self.tf.frameExists("/odom") and self.tf.frameExists("/base_footprint"):
+		    	t = self.tf.getLatestCommonTime("/odom", "/base_footprint")
+		        self.tb_pos = self.tf.lookupTransform("/odom", "/base_footprint", t)[0]
+		    print self.tb_vel
 		    
-		    self.pubTBCommand.publish(self.tb_cmd)
-		    #rospy.spin()
+		    self.pubTBCommand.publish(self.tb_vel)
+		    rospy.spin()
 
 if __name__ == '__main__':
 	try:
