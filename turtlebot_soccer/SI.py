@@ -24,18 +24,22 @@ class TB(object):
     
     '''turtlebot's knowledge'''
     epsilon = 0.3 # how greedy tb is
-    alpha = 0.01 # learning rate
-    gamma = 0.9 # discount factor
-    l = 0.7 # lambda for SARSA(l)
+    alpha = 0.0001 # learning rate
+    gamma = 0.3 # discount factor
+    l = 0.5 # lambda for SARSA(l)
     
-    state_dim = 3. # 3-dim continuous state for task 1
-    action_num = 2.  # discrete actions of 0/1
-    state = np.zeros(self.state_dim)
-    eli = np.zeros(self.state_dim) # eligibility trace
-    action = 0.
-    
-    '''func approximator'''
-    q_w = np.zeros((self.action_num, self.state_dim)) # 2nd order linear func parameter
+    state_dim = 3 # 3-dim continuous state for task 1
+    action_num = 2  # discrete actions of 0/1
+    state = None
+    eli = None # eligibility trace
+    action = 0
+    q_w = None
+
+    def __init__(self):
+    	self.state = np.zeros(self.state_dim)
+    	self.eli = np.zeros(2*self.state_dim+1)
+    	self.q_w = np.zeros((self.action_num, 2*self.state_dim+1)) # 2nd order linear func parameter
+
     def qFunc(self, s, derivative = False):
         s_ex = np.concatenate((np.power(s,2),s,[1.])) # the feature vector
         if derivative:
@@ -50,20 +54,20 @@ class TB(object):
         return int(random.random()*self.action_num) # take random action
         
     '''run 1 step w.r.t. given observations'''
-    def runSARSA(self, s, r=0, start=False, done=False):
+    def runSARSA(self, s, r=0, start=False, done=False, ep=None):
         if start:
-            self.state = s; self.action = self.actRandom; return self.action
-        if random.random()>self.epsilon: # epsilon greedy
+            self.state = s; self.action = self.actRandom(); return self.action
+        if ep == None:
+        	ep = self.epsilon
+        if random.random()>ep: # epsilon greedy
             a = self.actGreedy()
         else:
             a = self.actRandom()
         dt = self.gamma*self.qFunc(s)[a] + r - self.qFunc(self.state)[self.action]
         self.eli = self.gamma * self.l * self.eli + self.qFunc(self.state, derivative=True) # update eligibility trace
-        self.q_w += self.alpha * dt * self.eli # update func parameter
+        self.q_w[a] += self.alpha * dt * self.eli # update func parameter
+        # print self.q_w
         self.state = s; self.action = a; return a
-    
-    def __init__(self):
-        # nothing needed
 
 
 '''
