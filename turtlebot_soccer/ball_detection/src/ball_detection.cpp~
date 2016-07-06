@@ -1,0 +1,200 @@
+#include <ros/ros.h>
+#include <geometry_msgs/Twist.h>
+#include <pcl_ros/point_cloud.h>
+#include <pcl/point_types.h>
+#include <sensor_msgs/Image.h>
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <math.h>
+
+
+static const std::string OPENCV_WINDOW = "Image window";
+using namespace cv;
+namespace ball_detection
+{
+typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
+
+class BallDetector
+{
+	ros::NodeHandle nh;
+	image_transport::ImageTransport it_;
+	image_transport::Subscriber image_rgb_sub_;
+	image_transport::Subscriber image_depth_sub_;
+	image_transport::Publisher image_pub_;
+
+	cv_bridge::CvImagePtr cv_ptr_rgb;
+	cv_bridge::CvImagePtr cv_ptr_depth;
+
+	bool image_rgb_updated_;
+	bool image_depth_updated_;
+
+public:
+  /*!
+   * @brief The constructor for the follower.
+   * Constructor for the follower.
+   */
+  BallDetector() :it_(nh)
+{
+   image_rgb_updated_ = false;
+   image_depth_updated_ = false;
+
+   // Subscrive to input video feed and publish output video feed
+   image_rgb_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &BallDetector::imageRGBCallBack, this);
+
+   image_depth_sub_  = it_.subscribe("/camera/depth/image_rect", 1, &BallDetector::imageDepthCallBack, this);
+
+   image_pub_ = it_.advertise("/image_converter/output_video", 1);
+   cv::namedWindow(OPENCV_WINDOW);
+
+ }
+
+  ~BallDetector()
+  {
+	  cv::destroyWindow(OPENCV_WINDOW);
+  }
+
+  void imageRGBCallBack(const sensor_msgs::ImageConstPtr& msg)
+  {
+	  try
+	  {
+		  cv_ptr_rgb = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+		  image_rgb_updated_ = true;
+		  ROS_DEBUG("in imageRGBCallBack, successully get the msg");
+
+		  if (image_rgb_updated_ && image_depth_updated_)
+		  {
+			  imageBallDetection();
+		  }
+  	  }
+	  catch (cv_bridge::Exception& e)
+	  {
+		  ROS_ERROR("in imageRGBCallBack cv_bridge exception: %s", e.what());
+		  return;
+	  }
+  }
+
+  void imageDepthCallBack(const sensor_msgs::ImageConstPtr& msg)
+  {
+	  try
+	  {
+		  cv_ptr_depth = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
+
+		  image_depth_updated_ = true;
+		  ROS_DEBUG("in PointCloudCallBack, successully get the msg");
+
+		  if (image_rgb_updated_ && image_depth_updated_)
+		  {
+			  imageBallDetection();
+		  }
+	  }
+	  catch (cv_bridge::Exception& e)
+	  {
+		  ROS_ERROR("cv_bridge exception: %s", e.what());
+		  return;
+	  }
+  }
+
+  void imageBallDetection()
+  {
+
+	  cv::Mat rgb8_image = cv_ptr_rgb->image;
+
+	  cv::Mat hsv_image;
+	  cv::cvtColor(rgb8_image, hsv_image, cv::COLOR_BGR2HSV);
+
+	  // filter out backgroud pixels
+	  float depth_ = 2; // meter
+	  cv::Mat depth_float_img = cv_ptr_depth->image;
+	  for(int i=0; i<depth_float_img.rows; i++)
+	  {
+	      for(int j=0; j<depth_float_img.cols; j++)
+	      {
+	    	  if (depth_float_img.at<float>(i, j) > depth_)
+	    	  {
+	    		  cv::Vec3b pixel = hsv_image.at<cv::Vec3b>(i,j); // read pixel (0,0) (make copy)
+	    		  pixel[0] = 0; // H
+	    		  pixel[1] = 0; // S
+	    		  pixel[2] = 0; // V
+	    		  hsv_image.at<cv::Vec3b>(i,j) = pixel;
+	    	  }
+	      }
+	  }
+
+	  // filter out segments that are not "red"
+	  cv::Mat red_filter_image;
+	  cv::inRange(hsv_image, cv::Scalar(160, 100, 100), cv::Scalar(179, 255, 255), red_filter_image);
+
+	  cv::Mat gray_image = red_filter_image;
+
+	  //smooth it, otherwise a lot of false circles may be detected
+	  cv:: GaussianBlur(gray_image, gray_image, Size(5, 5), 2, 2 );
+
+	  // find the ball
+	  cv::vector< cv::vector<cv::Point> > contours;
+	  cv::vector<cv::Vec4i> heirarchy;
+	  cv::vector<cv::Point2i> center;
+	  cv::vector<float> radius;
+	  cv::findContours(gray_image.clone(),contours,heirarchy,CV_RETR_TREE,CV_CHAIN_APPROX_NONE);
+	  size_t count = contours.size();
+	  Point2f maxCenter;
+	  float maxTargetRadius = 0;
+	  for(int i=0;i<count;i++)
+	  {
+		  Point2f center;
+		  float radius;
+		  cv::minEnclosingCircle(contours[i], center, radius);
+		  if(radius >=maxTargetRadius)
+		  {
+			  maxTargetRadius = radius;
+			  maxCenter = center;
+
+		  }
+	  }
+
+	  float ball_x;
+	  float ball_y;
+	  float ball_z;
+
+	  // geometry
+	  // distance to object (mm) = focal length (mm) * real height of the object (mm) * image height (pixels)
+	  //                          ---------------------------------------------------------------------------
+	  //                          object height (pixels) * sensor height (mm)
+	  ball_x = maxCenter.x;
+	  ball_y = maxCenter.y;
+
+
+	  float focal_length = 216; //mm
+	  float real_height_ball = 150; //mm
+	  float image_height = 480;
+	  float object_height = 2*maxTargetRadius;
+	  float sensor_height = 180; //mm
+
+	  ball_z = (focal_length*real_height_ball*image_height/(object_height*sensor_height))/1000; //m
+
+	  std::cout<<"ball found! x = "<<maxCenter.x<<", y = "<<maxCenter.y<<", depth = "<<ball_z<<std::endl;
+
+
+	  //Update GUI Window
+	  //cv::circle(cv_ptr_rgb->image, maxCenter, maxTargetRadius, CV_RGB(255,0,0),5);
+	  //cv::imshow(OPENCV_WINDOW, cv_ptr_rgb->image);
+	  cv::circle(gray_image, maxCenter,maxTargetRadius, CV_RGB(255,0,0),5);
+	  cv::imshow(OPENCV_WINDOW, gray_image);
+	  cv::waitKey(3);
+
+  }
+
+
+};
+}
+
+
+int main(int argc, char** argv)
+{
+	ros::init(argc, argv, "ball_detection");
+	ball_detection::BallDetector bd;
+	ros::spin();
+	return 0;
+}

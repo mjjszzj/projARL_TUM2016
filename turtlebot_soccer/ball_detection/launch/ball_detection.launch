@@ -1,0 +1,10 @@
+<!--
+  b
+ -->
+<launch>
+  <node name="ball_detection" 
+   pkg="ball_detection" 
+   type="ball_detection"
+   output="screen"
+  /> 
+</launch>
