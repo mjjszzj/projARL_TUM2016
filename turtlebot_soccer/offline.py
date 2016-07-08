@@ -24,9 +24,9 @@ class ENV(object):
     acc_theta = 0.01
 
     freq = 10.
-    target = [1,2,1.57]#[0]*3# [x, y, omega]
+    target = [2.0,0,0]#[0]*3# [x, y, omega]
 
-    ball_radius = 0.05
+    ball_radius = 0.2
     
     def __init__(self):
         self.state = np.zeros(self.state_dim)
@@ -54,9 +54,9 @@ class ENV(object):
 
         oldspeed_theta = self.state[4]
         if action[1] == 1:
-            self.state[4] = min(self.state[4]+self.acc_x, 0.3)
+            self.state[4] = min(self.state[4]+self.acc_x, 0.6)
         elif action[1] == -1:
-            self.state[4] = max(self.state[4]-self.acc_x, -0.3)
+            self.state[4] = max(self.state[4]-self.acc_x, -0.6)
         elif action[1] == 0:
             pass
         else:
@@ -67,22 +67,23 @@ class ENV(object):
         self.state[1] += (self.state[2]*np.sin(self.state[3])/self.freq)
 
         ''' border control '''
-        if self.state[0] <= -3 and self.state[2]*np.cos(self.state[3]) < 0:# check position in x direction
-            self.state[0] = -3
+        x_min = 0; y_min = -1.5; x_max = 3; y_max = 1.5
+        if self.state[0] <= x_min and self.state[2]*np.cos(self.state[3]) < 0:# check position in x direction
+            self.state[0] = x_min
             self.state[2] = self.state[2]*np.sin(self.state[3])
-            reward -= 100#100000000
-        elif self.state[1] <= -3 and self.state[2]*np.sin(self.state[3]) < 0:# check position in y direction
-            self.state[1] = -3
+            reward -= 10000#000
+        elif self.state[1] <= y_min and self.state[2]*np.sin(self.state[3]) < 0:# check position in y direction
+            self.state[1] = y_min
             self.state[2] = self.state[2]*np.cos(self.state[3])
-            reward -= 100#00000
-        elif self.state[0] >= 3 and self.state[2]*np.cos(self.state[3]) > 0:# check x-wall
-            self.state[0] = 3
+            reward -= 10000#000
+        elif self.state[0] >= x_max and self.state[2]*np.cos(self.state[3]) > 0:# check x-wall
+            self.state[0] = x_max
             self.state[2] = self.state[2]*np.sin(self.state[3])
-            reward -= 100#00000
-        elif self.state[1] >= 3 and self.state[2]*np.sin(self.state[3]) > 0:# check y-wall
-            self.state[1] = 3
+            reward -= 10000#000
+        elif self.state[1] >= y_max and self.state[2]*np.sin(self.state[3]) > 0:# check y-wall
+            self.state[1] = y_max
             self.state[2] = self.state[2]*np.cos(self.state[3])
-            reward -= 100#00000
+            reward -= 10000#000
         
         ''' target check '''
         if np.power(self.state[0]-self.target[0], 2) + np.power(self.state[1]-self.target[1], 2) < np.power(self.ball_radius,2) \
@@ -96,11 +97,12 @@ class ENV(object):
         if self.state[5] == 0:
             reward += -(np.power(self.state[0]-self.target[0], 2) + np.power(self.state[1]-self.target[1], 2))
         else:
-            reward += - (abs(self.state[2]) + abs(self.state[4]))
+            reward += -(abs(self.state[2]) + abs(self.state[4]))
 
         #reward += -abs(self.target-self.state[0])-abs(self.state[1]/100)
         ''' done check '''
-        if self.state[5] == 1 and (abs(self.state[2]) + abs(self.state[4])) < 0.05:
+        if self.state[5] == 1 and (abs(self.state[2]) + abs(self.state[4])) < 0.01:
+            reward += 100
             return self.state, reward, True
         else:
             return self.state, reward, False
@@ -116,10 +118,10 @@ class TB(object):
 
     '''turtlebot's knowledge'''
     epsilon = 0.3 # how greedy tb is
-    alpha = 1e-6 # learning rate
-    beta = 1e-9 # learning rate for second term
+    alpha = 1e-9 # learning rate 1e-6 1e-7
+    beta = 1e-9 # learning rate for second term 1e-6 1e-7
     gamma = 1 # discount factor
-    l = 0.02 # lambda for SARSA(l)
+    l = 0.2 # lambda for SARSA(l) 0.02
     
     state_dim = 6. # 3-dim continuous state for task 1
     action_num = 2.  # discrete actions of -1/1
@@ -145,7 +147,7 @@ class TB(object):
         
     '''take actions'''
     def actGreedy(self):
-        possible_action=np.array([[1, 1], [1, 0], [1, -1], [0, 1], [0, 0], [0, -1], [-1, 1], [-1, 0], [-1, -1]])
+        possible_action=np.array([[1, 1], [1, -1], [-1, 1], [-1, -1]])
         vals = np.array([])
         for a in possible_action:
             vals = np.append(vals, self.qFunc(self.state, a))
@@ -157,8 +159,8 @@ class TB(object):
             return max_actions[int(random.random()*len(max_actions))]
         
     def actRandom(self):
-        return [int(random.random()*3)-1, \
-                     int(random.random()*3)-1] # take random action
+        return np.array([2*int(random.random()*2)-1, \
+                     2*int(random.random()*2)-1]) # take random action
         
     '''run 1 step w.r.t. given observations'''
     def runSARSA(self, s, a, r=0, start=False, done=False):
@@ -201,32 +203,42 @@ if __name__ == '__main__':
     agent = TB()
     count = 0
     episodes = list()
-    for i_episode in range(2000):
-        trace1 = list()
-        trace2 = list()
+    for i_episode in range(1000):
+        trace1 = list(); trace2 = list(); trace3 = list(); trace4 = list()
         state = env.reset()
         action = agent.actRandom()
         agent.runSARSA(state, action, start=True)
-        for t in range(100000):
+        for t in range(10000):
             count = count+1
             state, reward, done = env.step(action)
             #print(state, reward, action)
             trace1.append(state[0])
             trace2.append(state[1])
-            if random.random() > 0.3:
+            trace3.append(state[2])
+            trace4.append(state[4])
+            if random.random() > (1./count):
                 action = agent.actGreedy()
+                #print(state, action, reward)
             else:
                 action = agent.actRandom()
-            agent.runSARSA(state, action, reward)
-            #print(state, action, reward)
+            agent.runSARSA(state, action, reward)   
             #print(agent.qFunc([0,0,0],-1), agent.qFunc([0,0,0],1))
+            if np.mod(i_episode, 100) == 0:
+                print(action)
             if done:
                 break
         episodes.append(t+1)
         print("{}th episode finished after {} timesteps, Q value at start {}, {}".format(i_episode, t+1, \
-            agent.qFunc([0,0,0,0,0,0],[1, 0]), agent.qFunc([0,0,0,0,0,0],[0, 1])))
-        plt.plot(trace1,trace2)
-        plt.show()
+            agent.qFunc([0,0,0,0,0,0],[1, 1]), agent.qFunc([0,0,0,0,0,0],[-1, 1])))
+        if np.mod(i_episode, 100) == 0:
+            plt.plot(trace1,trace2)
+            plt.show()
+            plt.plot(trace3)
+            plt.plot(trace4)
+            plt.show()
+            print(agent.q_w1, agent.q_w2)
+            plt.plot(np.log(episodes))
+            plt.show()
     plt.plot(trace1)
     plt.plot(trace2)
     plt.show()
