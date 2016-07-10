@@ -24,7 +24,7 @@ class ENV(object):
     acc_theta = 0.01
 
     freq = 10.
-    target = [2.0,0,0]#[0]*3# [x, y, omega]
+    target = [0.,-1.,0]#[0]*3# [x, y, omega]
 
     ball_radius = 0.2
     
@@ -71,38 +71,39 @@ class ENV(object):
         if self.state[0] <= x_min and self.state[2]*np.cos(self.state[3]) < 0:# check position in x direction
             self.state[0] = x_min
             self.state[2] = self.state[2]*np.sin(self.state[3])
-            reward -= 10000#000
+            reward -= 10#0000
         elif self.state[1] <= y_min and self.state[2]*np.sin(self.state[3]) < 0:# check position in y direction
             self.state[1] = y_min
             self.state[2] = self.state[2]*np.cos(self.state[3])
-            reward -= 10000#000
+            reward -= 10#0000
         elif self.state[0] >= x_max and self.state[2]*np.cos(self.state[3]) > 0:# check x-wall
             self.state[0] = x_max
             self.state[2] = self.state[2]*np.sin(self.state[3])
-            reward -= 10000#000
+            reward -= 10#0000
         elif self.state[1] >= y_max and self.state[2]*np.sin(self.state[3]) > 0:# check y-wall
             self.state[1] = y_max
             self.state[2] = self.state[2]*np.cos(self.state[3])
-            reward -= 10000#000
+            reward -= 10#0000
         
         ''' target check '''
         if np.power(self.state[0]-self.target[0], 2) + np.power(self.state[1]-self.target[1], 2) < np.power(self.ball_radius,2) \
                 and self.state[5] == 0:
             self.state[5] = 1 # two policy
             print('target reached')
-            reward += 1000*self.state[1]
+            reward += 100*self.state[2]
             #pass # one policy
 
         ''' reward function '''
         if self.state[5] == 0:
-            reward += -(np.power(self.state[0]-self.target[0], 2) + np.power(self.state[1]-self.target[1], 2))
+            #reward += -(np.power(self.state[0]-self.target[0], 2) + np.power(self.state[1]-self.target[1], 2))
+            reward -= 1
         else:
             reward += -(abs(self.state[2]) + abs(self.state[4]))
 
         #reward += -abs(self.target-self.state[0])-abs(self.state[1]/100)
         ''' done check '''
-        if self.state[5] == 1 and (abs(self.state[2]) + abs(self.state[4])) < 0.01:
-            reward += 100
+        if self.state[5] == 1 :#and (abs(self.state[2]) + abs(self.state[4])) < 0.01:
+            #reward += 500
             return self.state, reward, True
         else:
             return self.state, reward, False
@@ -118,10 +119,10 @@ class TB(object):
 
     '''turtlebot's knowledge'''
     epsilon = 0.3 # how greedy tb is
-    alpha = 1e-9 # learning rate 1e-6 1e-7
-    beta = 1e-9 # learning rate for second term 1e-6 1e-7
+    alpha = 1e-8 # learning rate 1e-6 1e-7
+    beta = 1e-8 # learning rate for second term 1e-6 1e-7
     gamma = 1 # discount factor
-    l = 0.2 # lambda for SARSA(l) 0.02
+    l = 1 # lambda for SARSA(l) 0.02
     
     state_dim = 6. # 3-dim continuous state for task 1
     action_num = 2.  # discrete actions of -1/1
@@ -237,7 +238,7 @@ if __name__ == '__main__':
             plt.plot(trace4)
             plt.show()
             print(agent.q_w1, agent.q_w2)
-            plt.plot(np.log(episodes))
+            plt.plot(episodes)
             plt.show()
     plt.plot(trace1)
     plt.plot(trace2)
